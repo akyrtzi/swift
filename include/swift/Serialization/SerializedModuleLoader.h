@@ -434,6 +434,8 @@ public:
 
   virtual StringRef getFilename() const override;
 
+  virtual StringRef getBinaryFilename() const override;
+
   virtual StringRef getModuleDefiningPath() const override;
 
   Decl *getMainDecl() const override;
