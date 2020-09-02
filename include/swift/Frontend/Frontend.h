@@ -54,6 +54,7 @@ namespace swift {
 
 class SerializedModuleLoaderBase;
 class MemoryBufferSerializedModuleLoader;
+class ModuleFileSharedCoreRegistryModuleLoader;
 class SILModule;
 
 namespace Lowering {
@@ -427,6 +428,7 @@ class CompilerInstance {
   mutable ModuleDecl *MainModule = nullptr;
   SerializedModuleLoaderBase *DefaultSerializedLoader = nullptr;
   MemoryBufferSerializedModuleLoader *MemoryBufferLoader = nullptr;
+  ModuleFileSharedCoreRegistryModuleLoader *ModuleFileSharedCoreLoader = nullptr;
 
   /// Contains buffer IDs for input source code files.
   std::vector<unsigned> InputSourceCodeBufferIDs;
@@ -503,6 +505,11 @@ public:
   MemoryBufferSerializedModuleLoader *
   getMemoryBufferSerializedModuleLoader() const {
     return MemoryBufferLoader;
+  }
+
+  ModuleFileSharedCoreRegistryModuleLoader *
+  getModuleFileSharedCoreRegistryModuleLoader() const {
+    return ModuleFileSharedCoreLoader;
   }
 
   ArrayRef<unsigned> getInputBufferIDs() const {
