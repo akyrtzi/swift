@@ -8678,6 +8678,9 @@ ClangImporter::Implementation::importMirroredDecl(const clang::NamedDecl *decl,
         // we would for the protocol member it is mirroring.
         inferProtocolMemberAvailability(*this, dc, result);
       }
+
+      if (auto *VD = dyn_cast<ValueDecl>(result))
+        VD->setMirrored();
     };
 
     updateMirroredDecl(result);

@@ -605,6 +605,7 @@ bool swift::ide::CompletionInstance::performOperation(
     llvm::MemoryBuffer *completionBuffer, unsigned int Offset,
     std::string &Error, DiagnosticConsumer *DiagC,
     llvm::function_ref<void(CompilerInstance &, bool)> Callback) {
+//  llvm::errs() << "-----------\n";
   assert(Error.empty());
 
   // Always disable source location resolutions from .swiftsourceinfo file

@@ -408,7 +408,14 @@ private:
   using SerializerBase::SerializerBase;
   using SerializerBase::writeToStream;
 
+
+  bool ForImporterStateCaching = false;
+
 public:
+
+  bool isForImporterStateCaching() const {
+    return ForImporterStateCaching;
+  }
   /// Serialize a module to the given stream.
   static void
   writeToStream(raw_ostream &os, ModuleOrSourceFile DC,

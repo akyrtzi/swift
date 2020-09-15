@@ -6377,6 +6377,8 @@ void CodeCompletionCallbacksImpl::doneParsing() {
           ? ParsedExpr->getLoc()
           : CurDeclContext->getASTContext().SourceMgr.getCodeCompletionLoc());
 
+  //CurDeclContext->getParentSourceFile()->dump();
+
   // Add keywords even if type checking fails completely.
   addKeywords(CompletionContext.getResultSink(), MaybeFuncBody);
 

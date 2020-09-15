@@ -201,6 +201,12 @@ Status ModuleFile::associateWithFileContext(FileUnit *file, SourceLoc diagLoc,
     auto modulePath = importPath.getModulePath(dependency.isScoped());
     auto accessPath = importPath.getAccessPath(dependency.isScoped());
 
+//    llvm::errs() << "Dependency: ";
+//    llvm::errs() << this->getName();
+//    llvm::errs() << " -> ";
+//    llvm::interleave(modulePath, [](Located<Identifier> i) { llvm::errs() << i.Item; }, []() {llvm::errs() << "."; });
+//    llvm::errs() << "\n";
+//
     auto module = getModule(modulePath, /*allowLoading*/true);
     if (!module || module->failedToLoad()) {
       // If we're missing the module we're an overlay for, treat that specially.
@@ -226,7 +232,7 @@ Status ModuleFile::associateWithFileContext(FileUnit *file, SourceLoc diagLoc,
       dependency.spiGroups.push_back(ctx.getIdentifier(nextComponent));
     }
 
-    if (!module->hasResolvedImports()) {
+    if (!module->hasResolvedImports() && getName() != "SwiftShims" && getName() != "SwiftOverlayShims") {
       // Notice that we check this condition /after/ recording the module that
       // caused the problem. Clients need to be able to track down what the
       // cycle was.
@@ -260,6 +266,7 @@ ModuleFile::~ModuleFile() { }
 
 void ModuleFile::lookupValue(DeclName name,
                              SmallVectorImpl<ValueDecl*> &results) {
+//  llvm::errs() << "ModuleFile::lookupValue: " << name << " in " << getName() << "\n";
   PrettyStackTraceModuleFile stackEntry(*this);
 
   if (Core->TopLevelDecls) {

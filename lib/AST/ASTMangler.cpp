@@ -1929,12 +1929,14 @@ ASTMangler::getSpecialManglingContext(const ValueDecl *decl,
 /// This is the top-level entrypoint for mangling <context>.
 void ASTMangler::appendContextOf(const ValueDecl *decl) {
   // Check for a special mangling context.
-  if (auto context = getSpecialManglingContext(decl, UseObjCRuntimeNames)) {
-    switch (*context) {
-    case ClangImporterContext:
-      return appendOperator("SC");
-    case ObjCContext:
-      return appendOperator("So");
+  if (!ForceSwiftMangling) {
+    if (auto context = getSpecialManglingContext(decl, UseObjCRuntimeNames)) {
+      switch (*context) {
+      case ClangImporterContext:
+        return appendOperator("SC");
+      case ObjCContext:
+        return appendOperator("So");
+      }
     }
   }
 
@@ -2261,6 +2263,9 @@ void ASTMangler::appendAnyGenericType(const GenericTypeDecl *decl) {
   // Always use Clang names for imported Clang declarations, unless they don't
   // have one.
   auto tryAppendClangName = [this, decl]() -> bool {
+    if (ForceSwiftMangling)
+      return false;
+    
     auto *nominal = dyn_cast<NominalTypeDecl>(decl);
     auto namedDecl = getClangDeclForMangling(decl);
     if (!namedDecl)

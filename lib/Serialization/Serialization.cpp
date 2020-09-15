@@ -204,8 +204,12 @@ namespace {
         return -Serializer.addContainingModuleRef(nominal->getDeclContext());
 
       auto &mangledName = MangledNameCache[nominal];
-      if (mangledName.empty())
+      if (mangledName.empty()) {
+        Mangle::ASTMangler mangler;
+        if (Serializer.isForImporterStateCaching())
+          mangler.ForceSwiftMangling = true;
         mangledName = Mangle::ASTMangler().mangleNominalType(nominal);
+      }
 
       assert(llvm::isUInt<31>(mangledName.size()));
       if (dataToWrite)
@@ -615,6 +619,12 @@ DeclContextID Serializer::addDeclContextRef(const DeclContext *DC) {
 }
 
 DeclID Serializer::addDeclRef(const Decl *D, bool allowTypeAliasXRef) {
+  if (!(!D || !isDeclXRef(D) || isa<ValueDecl>(D) || isa<OperatorDecl>(D) ||
+        isa<PrecedenceGroupDecl>(D))) {
+    llvm::errs() << "NOT: \n";
+    llvm::errs() << "isDeclXref(D)" << isDeclXRef(D) << "\n";
+    D->dump();
+  }
   assert((!D || !isDeclXRef(D) || isa<ValueDecl>(D) || isa<OperatorDecl>(D) ||
           isa<PrecedenceGroupDecl>(D)) &&
          "cannot cross-reference this decl");
@@ -1164,6 +1174,16 @@ void Serializer::writeInputBlock(const SerializationOptions &options) {
         import.importedModule == bridgingHeaderModule) {
       continue;
     }
+    if (ForImporterStateCaching) {
+      if (auto clangMod = M->findUnderlyingClangModule()) {
+        if (auto importedClangMod = import.importedModule->findUnderlyingClangModule()) {
+          if (importedClangMod != clangMod &&
+              importedClangMod->isSubModuleOf(clangMod)) {
+            continue;
+          }
+        }
+      }
+    }
 
     SmallString<64> importPath;
     flattenImportPath(import, importPath);
@@ -1421,7 +1441,9 @@ void Serializer::writeASTBlockEntity(
 
   // The conformance must be complete, or we can't serialize it.
   assert(conformance->isComplete() ||
-         getASTContext().LangOpts.AllowModuleWithCompilerErrors);
+         getASTContext().LangOpts.AllowModuleWithCompilerErrors ||
+         isa<ClangModuleUnit>(
+             conformance->getDeclContext()->getModuleScopeContext()));
   assert(NormalConformancesToSerialize.hasRef(conformance));
 
   auto protocol = conformance->getProtocol();
@@ -1516,8 +1538,9 @@ Serializer::writeConformance(ProtocolConformanceRef conformanceRef,
   case ProtocolConformanceKind::Normal: {
     auto normal = cast<NormalProtocolConformance>(conformance);
     if (!isDeclXRef(normal->getDeclContext()->getAsDecl())
-        && !isa<ClangModuleUnit>(normal->getDeclContext()
-                                       ->getModuleScopeContext())) {
+      && !(isa<ClangModuleUnit>(normal->getDeclContext()->getModuleScopeContext()) &&
+           M != normal->getDeclContext()->getParentModule())) {
+
       // A normal conformance in this module file.
       unsigned abbrCode = abbrCodes[NormalProtocolConformanceIdLayout::Code];
       NormalProtocolConformanceIdLayout::emitRecord(Out, ScratchRecord,
@@ -2664,6 +2687,9 @@ class Serializer::DeclSerializer : public DeclVisitor<DeclSerializer> {
 
     if (shouldEmitFilenameForPrivate || shouldEmitPrivateDiscriminator) {
       auto topLevelSubcontext = value->getDeclContext()->getModuleScopeContext();
+      if (isa<ClangModuleUnit>(topLevelSubcontext)) {
+        return;
+      }
       if (auto *enclosingFile = dyn_cast<FileUnit>(topLevelSubcontext)) {
         if (shouldEmitPrivateDiscriminator) {
           Identifier discriminator =
@@ -3087,6 +3113,7 @@ public:
                                 S.addDeclRef(extendedNominal),
                                 contextID.getOpaqueValue(),
                                 extension->isImplicit(),
+                                extension->isOriginatedFromClang(),
                                 S.addGenericSignatureRef(
                                            extension->getGenericSignature()),
                                 conformances.size(),
@@ -3253,6 +3280,7 @@ public:
                                 S.addTypeRef(underlying),
                                 /*no longer used*/TypeID(),
                                 typeAlias->isImplicit(),
+                                typeAlias->isOriginatedFromClang(),
                                 S.addGenericSignatureRef(
                                              typeAlias->getGenericSignature()),
                                 rawAccessLevel,
@@ -3323,6 +3351,7 @@ public:
                              S.addDeclBaseNameRef(theStruct->getName()),
                              contextID.getOpaqueValue(),
                              theStruct->isImplicit(),
+                             theStruct->isOriginatedFromClang(),
                              theStruct->isObjC(),
                              S.addGenericSignatureRef(
                                             theStruct->getGenericSignature()),
@@ -3380,6 +3409,7 @@ public:
                             S.addDeclBaseNameRef(theEnum->getName()),
                             contextID.getOpaqueValue(),
                             theEnum->isImplicit(),
+                            theEnum->isOriginatedFromClang(),
                             theEnum->isObjC(),
                             S.addGenericSignatureRef(
                                              theEnum->getGenericSignature()),
@@ -3397,7 +3427,7 @@ public:
   void visitClassDecl(const ClassDecl *theClass) {
     using namespace decls_block;
     verifyAttrSerializable(theClass);
-    assert(!theClass->isForeign());
+    //assert(!theClass->isForeign());
 
     auto contextID = S.addDeclContextRef(theClass->getDeclContext());
 
@@ -3438,6 +3468,7 @@ public:
                             contextID.getOpaqueValue(),
                             theClass->isImplicit(),
                             theClass->isObjC(),
+                            theClass->isOriginatedFromClang(),
                             theClass->isExplicitActor(),
                             mutableClass->inheritsSuperclassInitializers(),
                             mutableClass->hasMissingDesignatedInitializers(),
@@ -3489,6 +3520,7 @@ public:
                                S.addDeclBaseNameRef(proto->getName()),
                                contextID.getOpaqueValue(),
                                proto->isImplicit(),
+                               proto->isOriginatedFromClang(),
                                const_cast<ProtocolDecl *>(proto)
                                  ->requiresClass(),
                                proto->isObjC(),
@@ -3548,6 +3580,7 @@ public:
                           S.addDeclBaseNameRef(var->getName()),
                           contextID.getOpaqueValue(),
                           var->isImplicit(),
+                          var->isOriginatedFromClang(),
                           var->isObjC(),
                           var->isStatic(),
                           rawIntroducer,
@@ -3631,6 +3664,8 @@ public:
     FuncLayout::emitRecord(S.Out, S.ScratchRecord, abbrCode,
                            contextID.getOpaqueValue(),
                            fn->isImplicit(),
+                           fn->isOriginatedFromClang(),
+                           fn->isMirrored(),
                            fn->isStatic(),
                            uint8_t(
                              getStableStaticSpelling(fn->getStaticSpelling())),
@@ -3717,6 +3752,8 @@ public:
     AccessorLayout::emitRecord(S.Out, S.ScratchRecord, abbrCode,
                                contextID.getOpaqueValue(),
                                fn->isImplicit(),
+                               fn->isOriginatedFromClang(),
+                               fn->isMirrored(),
                                fn->isStatic(),
                                uint8_t(getStableStaticSpelling(
                                                   fn->getStaticSpelling())),
@@ -3785,6 +3822,7 @@ public:
     EnumElementLayout::emitRecord(S.Out, S.ScratchRecord, abbrCode,
                                   contextID.getOpaqueValue(),
                                   elem->isImplicit(),
+                                  elem->isOriginatedFromClang(),
                                   elem->hasAssociatedValues(),
                                   (unsigned)rawValueKind,
                                   isRawValueImplicit,
@@ -3882,6 +3920,7 @@ public:
                                   ctor->isFailable(),
                                   ctor->isImplicitlyUnwrappedOptional(),
                                   ctor->isImplicit(),
+                                  ctor->isOriginatedFromClang(),
                                   ctor->isObjC(),
                                   ctor->hasStubImplementation(),
                                   ctor->hasThrows(),
@@ -3917,6 +3956,7 @@ public:
     DestructorLayout::emitRecord(S.Out, S.ScratchRecord, abbrCode,
                                  contextID.getOpaqueValue(),
                                  dtor->isImplicit(),
+                                 dtor->isOriginatedFromClang(),
                                  dtor->isObjC(),
                                  S.addGenericSignatureRef(
                                                 dtor->getGenericSignature()));
@@ -3974,7 +4014,7 @@ void Serializer::writeASTBlockEntity(const Decl *D) {
     return;
   }
 
-  assert(!D->hasClangNode() && "imported decls should use cross-references");
+  //assert(!D->hasClangNode() && "imported decls should use cross-references");
 
   DeclSerializer(*this, DeclsToSerialize.addRef(D),
                  exportedPrespecializationDecls)
@@ -4355,7 +4395,7 @@ public:
 
     auto resultType = S.addTypeRef(fnTy->getResult());
     auto clangType =
-      S.getASTContext().LangOpts.UseClangFunctionTypes
+      S.getASTContext().LangOpts.UseClangFunctionTypes && !S.ForImporterStateCaching
       ? S.addClangTypeRef(fnTy->getClangTypeInfo().getType())
       : ClangTypeID(0);
     auto globalActor = S.addTypeRef(fnTy->getGlobalActor());
@@ -5292,8 +5332,15 @@ void Serializer::writeAST(ModuleOrSourceFile DC) {
         topLevelDecls[VD->getBaseName()]
           .push_back({ getKindForTable(D), addDeclRef(D) });
       } else if (auto ED = dyn_cast<ExtensionDecl>(D)) {
+        if (ED->getParentModule() != M)
+          continue;
         const NominalTypeDecl *extendedNominal = ED->getExtendedNominal();
         if (extendedNominal) {
+//        llvm::errs() << "ExtensionDecl: ";
+//        extendedNominal->dumpRef();
+//        llvm::errs() << " declared in ";
+//        llvm::errs() << ED->getParentModule()->getNameStr();
+//        llvm::errs() << "\n";
           extensionDecls[extendedNominal->getName()]
             .push_back({ extendedNominal, addDeclRef(D) });
         }
@@ -5494,6 +5541,8 @@ void Serializer::writeToStream(
     const fine_grained_dependencies::SourceFileDepGraph *DepGraph) {
   Serializer S{SWIFTMODULE_SIGNATURE, DC};
 
+  S.ForImporterStateCaching = options.ForImorterStateCache;
+
   // FIXME: This is only really needed for debugging. We don't actually use it.
   S.writeBlockInfoBlock();
 
@@ -5519,7 +5568,6 @@ void swift::serializeToBuffers(
   std::unique_ptr<llvm::MemoryBuffer> *moduleSourceInfoBuffer,
   const SILModule *M) {
 
-  assert(!StringRef::withNullAsEmpty(options.OutputPath).empty());
   {
     FrontendStatsTracer tracer(getContext(DC).Stats,
                                "Serialization, swiftmodule, to buffer");
@@ -5527,48 +5575,55 @@ void swift::serializeToBuffers(
     llvm::raw_svector_ostream stream(buf);
     Serializer::writeToStream(stream, DC, M, options,
                               /*dependency info*/ nullptr);
-    bool hadError = withOutputFile(getContext(DC).Diags,
-                                   options.OutputPath,
-                                   [&](raw_ostream &out) {
-      out << stream.str();
-      return false;
-    });
-    if (hadError)
-      return;
+    if (!StringRef::withNullAsEmpty(options.OutputPath).empty()) {
+      bool hadError = withOutputFile(getContext(DC).Diags, options.OutputPath,
+                                     [&](raw_ostream &out) {
+                                       out << stream.str();
+                                       return false;
+                                     });
+      if (hadError)
+        return;
+    }
     if (moduleBuffer)
       *moduleBuffer = std::make_unique<llvm::SmallVectorMemoryBuffer>(
                         std::move(buf), options.OutputPath);
   }
 
-  if (!StringRef::withNullAsEmpty(options.DocOutputPath).empty()) {
+  if (!StringRef::withNullAsEmpty(options.DocOutputPath).empty() ||
+      moduleDocBuffer) {
     FrontendStatsTracer tracer(getContext(DC).Stats,
                                "Serialization, swiftdoc, to buffer");
     llvm::SmallString<1024> buf;
     llvm::raw_svector_ostream stream(buf);
     writeDocToStream(stream, DC, options.GroupInfoPath);
-    (void)withOutputFile(getContext(DC).Diags,
-                         options.DocOutputPath,
-                         [&](raw_ostream &out) {
-      out << stream.str();
-      return false;
-    });
+    if (!StringRef::withNullAsEmpty(options.DocOutputPath).empty()) {
+      (void)withOutputFile(getContext(DC).Diags,
+                           options.DocOutputPath,
+                           [&](raw_ostream &out) {
+        out << stream.str();
+        return false;
+      });
+    }
     if (moduleDocBuffer)
       *moduleDocBuffer = std::make_unique<llvm::SmallVectorMemoryBuffer>(
                            std::move(buf), options.DocOutputPath);
   }
 
-  if (!StringRef::withNullAsEmpty(options.SourceInfoOutputPath).empty()) {
+  if (!StringRef::withNullAsEmpty(options.SourceInfoOutputPath).empty() ||
+      moduleSourceInfoBuffer) {
     FrontendStatsTracer tracer(getContext(DC).Stats,
                                "Serialization, swiftsourceinfo, to buffer");
     llvm::SmallString<1024> buf;
     llvm::raw_svector_ostream stream(buf);
     writeSourceInfoToStream(stream, DC);
-    (void)withOutputFile(getContext(DC).Diags,
-                         options.SourceInfoOutputPath,
-                         [&](raw_ostream &out) {
-      out << stream.str();
-      return false;
-    });
+    if (!StringRef::withNullAsEmpty(options.SourceInfoOutputPath).empty()) {
+      (void)withOutputFile(getContext(DC).Diags,
+                           options.SourceInfoOutputPath,
+                           [&](raw_ostream &out) {
+        out << stream.str();
+        return false;
+      });
+    }
     if (moduleSourceInfoBuffer)
       *moduleSourceInfoBuffer = std::make_unique<llvm::SmallVectorMemoryBuffer>(
           std::move(buf), options.SourceInfoOutputPath);
