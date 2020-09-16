@@ -8546,6 +8546,10 @@ static void finishMissingOptionalWitnesses(
         }
       }
 
+      llvm::errs() << "Setting opaque witness: \n";
+      valueReq->getDeclContext()->dumpContext();
+      valueReq->dumpRef(llvm::errs());
+      llvm::errs() << "\n";
       conformance->setWitness(valueReq, valueReq);
     } else {
       // An initializer that conforms to a requirement is required.
@@ -9424,7 +9428,7 @@ void ClangImporter::Implementation::collectMembersToAdd(
   // members of those protocols are mirrored into the interface or
   // category.
   // FIXME: This is supposed to be a short-term hack.
-  importMirroredProtocolMembers(objcContainer, DC, None, members);
+  //importMirroredProtocolMembers(objcContainer, DC, None, members);
 }
 
 void ClangImporter::Implementation::loadAllConformances(
