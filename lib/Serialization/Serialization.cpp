@@ -619,12 +619,6 @@ DeclContextID Serializer::addDeclContextRef(const DeclContext *DC) {
 }
 
 DeclID Serializer::addDeclRef(const Decl *D, bool allowTypeAliasXRef) {
-  if (!(!D || !isDeclXRef(D) || isa<ValueDecl>(D) || isa<OperatorDecl>(D) ||
-        isa<PrecedenceGroupDecl>(D))) {
-    llvm::errs() << "NOT: \n";
-    llvm::errs() << "isDeclXref(D)" << isDeclXRef(D) << "\n";
-    D->dump();
-  }
   assert((!D || !isDeclXRef(D) || isa<ValueDecl>(D) || isa<OperatorDecl>(D) ||
           isa<PrecedenceGroupDecl>(D)) &&
          "cannot cross-reference this decl");
@@ -3581,6 +3575,7 @@ public:
                           contextID.getOpaqueValue(),
                           var->isImplicit(),
                           var->isOriginatedFromClang(),
+                          S.addDeclRef(var->getMirroredFrom()),
                           var->isObjC(),
                           var->isStatic(),
                           rawIntroducer,
@@ -3665,7 +3660,7 @@ public:
                            contextID.getOpaqueValue(),
                            fn->isImplicit(),
                            fn->isOriginatedFromClang(),
-                           fn->isMirrored(),
+                           S.addDeclRef(fn->getMirroredFrom()),
                            fn->isStatic(),
                            uint8_t(
                              getStableStaticSpelling(fn->getStaticSpelling())),
@@ -3753,7 +3748,7 @@ public:
                                contextID.getOpaqueValue(),
                                fn->isImplicit(),
                                fn->isOriginatedFromClang(),
-                               fn->isMirrored(),
+                               S.addDeclRef(fn->getMirroredFrom()),
                                fn->isStatic(),
                                uint8_t(getStableStaticSpelling(
                                                   fn->getStaticSpelling())),
