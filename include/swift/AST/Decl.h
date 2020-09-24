@@ -1005,6 +1005,10 @@ public:
   // doesn't declare any @_spi.
   ArrayRef<Identifier> getSPIGroups() const;
 
+  void setMirroredFrom(Decl *D);
+
+  Decl *getMirroredFrom() const;
+
   /// Emit a diagnostic tied to this declaration.
   template<typename ...ArgTypes>
   InFlightDiagnostic diagnose(
@@ -1989,7 +1993,6 @@ class ValueDecl : public Decl {
   SourceLoc NameLoc;
   llvm::PointerIntPair<Type, 3, OptionalEnum<AccessLevel>> TypeAndAccess;
   unsigned LocalDiscriminator = 0;
-  ValueDecl *MirroredFrom = nullptr;
 
   struct {
     /// Whether the "IsObjC" bit has been computed yet.
@@ -2082,13 +2085,6 @@ public:
 
   bool isUserAccessible() const {
     return Bits.ValueDecl.IsUserAccessible;
-  }
-
-  void setMirroredFrom(ValueDecl *VD) {
-    MirroredFrom = VD;
-  }
-  ValueDecl *getMirroredFrom() const {
-    return MirroredFrom;
   }
 
   bool isSynthesized() const {

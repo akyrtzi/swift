@@ -3916,6 +3916,7 @@ public:
                                   ctor->isImplicitlyUnwrappedOptional(),
                                   ctor->isImplicit(),
                                   ctor->isOriginatedFromClang(),
+                                  S.addDeclRef(ctor->getMirroredFrom()),
                                   ctor->isObjC(),
                                   ctor->hasStubImplementation(),
                                   ctor->hasThrows(),
