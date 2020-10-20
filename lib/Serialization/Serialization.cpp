@@ -5306,7 +5306,7 @@ void Serializer::writeAST(ModuleOrSourceFile DC) {
       Scratch.push_back(synthesizedFile);
     files = llvm::makeArrayRef(Scratch);
   } else {
-    files = M->getFiles();
+    files = const_cast<ModuleDecl *>(M)->getTopLevelModule()->getFiles();
   }
   for (auto nextFile : files) {
     if (nextFile->hasEntryPoint())
@@ -5317,6 +5317,10 @@ void Serializer::writeAST(ModuleOrSourceFile DC) {
     nextFile->getTopLevelDecls(fileDecls);
 
     for (auto D : fileDecls) {
+      if (auto clangD = D->getClangDecl()) {
+        M->findUnderlyingClangModule();
+        if (clangD->getImportedOwningModule())
+      }
       if (isa<ImportDecl>(D) || isa<IfConfigDecl>(D) ||
           isa<PoundDiagnosticDecl>(D) || isa<TopLevelCodeDecl>(D)) {
         continue;
