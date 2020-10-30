@@ -8575,8 +8575,11 @@ void ClangImporter::Implementation::finishNormalConformance(
     NormalProtocolConformance *conformance,
     uint64_t unused) {
   (void)unused;
+  llvm::errs() << "finishNormalConformance: - 1\n";
 
   auto *proto = conformance->getProtocol();
+  proto->dumpRef(llvm::errs());
+  llvm::errs() << "\n";
   PrettyStackTraceConformance trace("completing import of", conformance);
 
   finishTypeWitnesses(conformance);
