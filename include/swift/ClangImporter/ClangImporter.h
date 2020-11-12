@@ -492,6 +492,12 @@ ImportDecl *createImportDecl(ASTContext &Ctx, DeclContext *DC, ClangNode ClangN,
 std::string
 getModuleCachePathFromClang(const clang::CompilerInstance &Instance);
 
+/// Returns the nearest parent of \p module that is marked \c explicit in its
+/// module map. If \p module is itself explicit, it is returned; if no module
+/// in the parent chain is explicit, the top-level module is returned.
+const clang::Module *
+getExplicitParentModule(const clang::Module *module);
+
 /// Whether the given parameter name identifies a completion handler.
 bool isCompletionHandlerParamName(StringRef paramName);
 
