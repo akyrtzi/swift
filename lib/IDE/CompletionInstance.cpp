@@ -20,6 +20,7 @@
 #include "swift/AST/SourceFile.h"
 #include "swift/Basic/Defer.h"
 #include "swift/Basic/LangOptions.h"
+#include "swift/Basic/Platform.h"
 #include "swift/Basic/PrettyStackTrace.h"
 #include "swift/Basic/SourceManager.h"
 #include "swift/ClangImporter/ClangModule.h"
@@ -621,8 +622,6 @@ bool swift::ide::CompletionInstance::performOperation(
 
   if (Opts.ReuseLoadedModules)
     Invocation.getLangOptions().EnableModuleFileSharedCoreRegistryImporter = true;
-  else
-    clearModuleFileSharedCoreRegistry();
 
   // Compute the signature of the invocation.
   llvm::hash_code ArgsHash(0);
@@ -642,7 +641,11 @@ bool swift::ide::CompletionInstance::performOperation(
 
   case CachedOperationResult::UpdatedDependency:
     if (Opts.ReuseLoadedModules)
-      clearModuleFileSharedCoreRegistry();
+      initModuleFileSharedCoreRegistry(
+          Invocation.getSearchPathOptions().ImporterStatePath,
+          Invocation.getSearchPathOptions().SDKPath,
+          Invocation.getLangOptions().Target,
+          version::getSwiftFullVersion());
     break;
 
   case CachedOperationResult::NeedNewASTContext:
@@ -659,8 +662,21 @@ bool swift::ide::CompletionInstance::performOperation(
   return Error.empty();
 }
 
-void swift::ide::CompletionInstance::clearModuleFileSharedCoreRegistry() {
-  ModuleRegistry->clear();
+void swift::ide::CompletionInstance::initModuleFileSharedCoreRegistry(
+    const std::string &ImporterStatePath, const std::string &SDKPath,
+    const llvm::Triple &Target, const std::string &swiftVersion) {
+
+  SmallString<256> cachePath;
+  if (!ImporterStatePath.empty()) {
+    cachePath.append(ImporterStatePath);
+    llvm::hash_code H = llvm::hash_combine(
+       SDKPath, getTargetSpecificModuleTriple(Target).str(), swiftVersion);
+
+    llvm::sys::path::append(cachePath,
+                            llvm::APInt(64, H).toString(36, /*Signed=*/false));
+  }
+
+  ModuleRegistry = std::make_shared<ModuleFileSharedCoreRegistry>(cachePath);
 }
 
 void swift::ide::CompletionInstance::updateModuleFileSharedCoreRegistry(
