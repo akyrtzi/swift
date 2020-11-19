@@ -1545,6 +1545,8 @@ namespace  {
     UNINTERESTING_ATTR(AtReasync)
     UNINTERESTING_ATTR(Nonisolated)
 
+    UNINTERESTING_ATTR(ObjCDirect)
+
 #undef UNINTERESTING_ATTR
 
     void visitAvailableAttr(AvailableAttr *attr) {

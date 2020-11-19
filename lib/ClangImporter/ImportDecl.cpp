@@ -8242,8 +8242,12 @@ void ClangImporter::Implementation::importAttributes(
     }
   }
 
+  // If the declaration is unavailable, we're done.
+  if (AnyUnavailable)
+    return;
+
   if (auto method = dyn_cast<clang::ObjCMethodDecl>(ClangDecl)) {
-    if (method->isDirectMethod() && !AnyUnavailable) {
+    if (method->isDirectMethod()) {
       assert(isa<AbstractFunctionDecl>(MappedDecl) &&
              "objc_direct declarations are expected to be an AbstractFunctionDecl");
       MappedDecl->getAttrs().add(new (C) FinalAttr(/*IsImplicit=*/true));
@@ -8254,9 +8258,13 @@ void ClangImporter::Implementation::importAttributes(
     }
   }
 
-  // If the declaration is unavailable, we're done.
-  if (AnyUnavailable)
-    return;
+  if (auto method = dyn_cast<clang::ObjCMethodDecl>(ClangDecl)) {
+    if (method->isDirectMethod())
+      MappedDecl->getAttrs().add(new (C) ObjCDirectAttr(/*isImplicit=*/true));
+  } else if (auto property = dyn_cast<clang::ObjCPropertyDecl>(ClangDecl)) {
+    if (property->isDirectProperty())
+      MappedDecl->getAttrs().add(new (C) ObjCDirectAttr(/*isImplicit=*/true));
+  }
 
   if (auto ID = dyn_cast<clang::ObjCInterfaceDecl>(ClangDecl)) {
     // Ban NSInvocation.

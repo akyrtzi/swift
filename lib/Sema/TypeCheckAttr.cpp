@@ -132,6 +132,7 @@ public:
   IGNORED_ATTR(Sendable)
   IGNORED_ATTR(AtRethrows)
   IGNORED_ATTR(AtReasync)
+  IGNORED_ATTR(ObjCDirect)
 #undef IGNORED_ATTR
 
   void visitAlignmentAttr(AlignmentAttr *attr) {

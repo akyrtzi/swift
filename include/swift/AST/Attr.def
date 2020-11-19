@@ -637,6 +637,10 @@ CONTEXTUAL_SIMPLE_DECL_ATTR(nonisolated, Nonisolated,
   APIBreakingToAdd | APIStableToRemove,
   112)
 
+SIMPLE_DECL_ATTR(_objcDirect, ObjCDirect,
+  OnAbstractFunction | OnVar | RejectByParser |
+  ABIStableToAdd | ABIStableToRemove | APIStableToAdd | APIStableToRemove,
+  113)
 
 #undef TYPE_ATTR
 #undef DECL_ATTR_ALIAS
